@@ -412,4 +412,57 @@ var enMap = map[string]string{
 	": збережено власний .ovpn конфіг: config/profiles/": ": custom .ovpn config saved: config/profiles/",
 	"Автозавантажено власний .ovpn конфіг: ": "Custom .ovpn config auto-loaded: ",
 	"Помилка: ": "Error: ",
+
+	// ── WireGuard ─────────────────────────────────────────────────────────
+	"=== Запуск WireGuard тунелю ===": "=== Starting the WireGuard tunnel ===",
+	"Профіль: {name} | Адреса тунелю: {addr} | Пірів: {peers}":
+		"Profile: {name} | Tunnel address: {addr} | Peers: {peers}",
+	"Не вдалося розпізнати Endpoint «{ep}»: {ex}":
+		"Failed to resolve Endpoint \"{ep}\": {ex}",
+	"Endpoint {i}: {ep}": "Endpoint {i}: {ep}",
+	"wintun.dll скопійовано до папки застосунку.": "wintun.dll copied to the app folder.",
+	"Драйвер Wintun встановлено: ": "Wintun driver installed: ",
+	"Не вдалося завантажити драйвер Wintun": "Failed to download the Wintun driver",
+	"Не вдалося створити Wintun адаптер: {ex} (потрібні права адміністратора)":
+		"Failed to create the Wintun adapter: {ex} (administrator privileges required)",
+	"Wintun адаптер «{name}» створено (MTU {mtu}).": "Wintun adapter \"{name}\" created (MTU {mtu}).",
+	"Помилка конфігурації тунелю: {ex}": "Tunnel configuration error: {ex}",
+	"Не вдалося запустити тунель: {ex}": "Failed to start the tunnel: {ex}",
+	"Тунель ініціалізовано, очікую хендшейк з сервером...":
+		"Tunnel initialized, waiting for the handshake with the server...",
+	"Хендшейк не вдався: сервер недоступний або ключі невірні.":
+		"Handshake failed: the server is unreachable or the keys are invalid.",
+	"Хендшейк ще не отримано — трафік через тунель не генерується...":
+		"Handshake not received yet — no traffic is being generated through the tunnel...",
+	"WireGuard хендшейк успішний — тунель активний! ✓": "WireGuard handshake succeeded — tunnel is active! ✓",
+	"Закриття WireGuard тунелю...": "Closing the WireGuard tunnel...",
+	"Хендшейк застарілий (>180с) — сервер може бути недоступним.":
+		"Handshake is stale (>180s) — the server may be unreachable.",
+	"Адресу {addr} призначено адаптеру «{name}».":
+		"Address {addr} assigned to the \"{name}\" adapter.",
+	"Метрику адаптера тунелю знижено (пріоритет над фізичним інтернетом).":
+		"Tunnel adapter metric lowered (priority over the physical network).",
+	"DNS тунелю: {servers}": "Tunnel DNS: {servers}",
+	"Full-tunnel: маршрути 0.0.0.0/1 + 128.0.0.0/1 через тунель.":
+		"Full-tunnel: routes 0.0.0.0/1 + 128.0.0.0/1 through the tunnel.",
+	"Full-tunnel (IPv6): маршрути ::/1 + 8000::/1 через тунель.":
+		"Full-tunnel (IPv6): routes ::/1 + 8000::/1 through the tunnel.",
+	"Маршрут {p} не додано (можливо, вже існує).":
+		"Route {p} was not added (it may already exist).",
+	"Сокети не прив'язано до «{name}»: {ex}":
+		"Sockets were not bound to \"{name}\": {ex}",
+	"UDP сокети тунелю прив'язано до фізичного інтерфейсу «{name}».":
+		"Tunnel UDP sockets bound to the physical interface \"{name}\".",
+	"Без прав адміністратора маршрути не встановити.":
+		"Routes cannot be installed without administrator privileges.",
+	"Профіль WireGuard не обрано.": "No WireGuard profile is selected.",
+	"Спочатку оберіть .conf профіль на вкладці WireGuard.":
+		"First select a .conf profile on the WireGuard tab.",
+	"WireGuard підключено через {country}!": "WireGuard connected via {country}!",
+	"WireGuard відключено: {ex}": "WireGuard disconnected: {ex}",
+	"WireGuard успішно відключено.": "WireGuard disconnected successfully.",
+	"Некоректний WireGuard конфіг: {ex}": "Invalid WireGuard config: {ex}",
+	"Виберіть свій .conf конфіг WireGuard": "Select your WireGuard .conf config",
+	"WireGuard конфігурації (*.conf)": "WireGuard configurations (*.conf)",
+	"Некоректний .conf конфіг: {ex}": "Invalid .conf config: {ex}",
 }

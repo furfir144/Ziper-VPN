@@ -14,20 +14,40 @@ export function ClearVPNLogs() {
   return window['go']['main']['App']['ClearVPNLogs']();
 }
 
+export function ClearWireGuardLogs() {
+  return window['go']['main']['App']['ClearWireGuardLogs']();
+}
+
 export function ConnectServer(arg1) {
   return window['go']['main']['App']['ConnectServer'](arg1);
+}
+
+export function ConnectWireGuard() {
+  return window['go']['main']['App']['ConnectWireGuard']();
 }
 
 export function DeleteProfile(arg1) {
   return window['go']['main']['App']['DeleteProfile'](arg1);
 }
 
+export function DeleteWireGuardProfile(arg1) {
+  return window['go']['main']['App']['DeleteWireGuardProfile'](arg1);
+}
+
 export function DeselectCustomProfile() {
   return window['go']['main']['App']['DeselectCustomProfile']();
 }
 
+export function DeselectWireGuardProfile(arg1) {
+  return window['go']['main']['App']['DeselectWireGuardProfile'](arg1);
+}
+
 export function DisconnectVPN() {
   return window['go']['main']['App']['DisconnectVPN']();
+}
+
+export function DisconnectWireGuard() {
+  return window['go']['main']['App']['DisconnectWireGuard']();
 }
 
 export function Elevate() {
@@ -70,12 +90,32 @@ export function GetVPNState() {
   return window['go']['main']['App']['GetVPNState']();
 }
 
+export function GetWireGuardLogs() {
+  return window['go']['main']['App']['GetWireGuardLogs']();
+}
+
+export function GetWireGuardProfileInfo(arg1) {
+  return window['go']['main']['App']['GetWireGuardProfileInfo'](arg1);
+}
+
+export function GetWireGuardState() {
+  return window['go']['main']['App']['GetWireGuardState']();
+}
+
+export function ImportWireGuardProfileDialog() {
+  return window['go']['main']['App']['ImportWireGuardProfileDialog']();
+}
+
 export function IsAdmin() {
   return window['go']['main']['App']['IsAdmin']();
 }
 
 export function ListProfiles() {
   return window['go']['main']['App']['ListProfiles']();
+}
+
+export function ListWireGuardProfiles() {
+  return window['go']['main']['App']['ListWireGuardProfiles']();
 }
 
 export function LoadProfile(arg1) {
@@ -102,6 +142,10 @@ export function SelectServer(arg1, arg2) {
   return window['go']['main']['App']['SelectServer'](arg1, arg2);
 }
 
+export function SelectWireGuardProfile(arg1) {
+  return window['go']['main']['App']['SelectWireGuardProfile'](arg1);
+}
+
 export function SetLanguage(arg1) {
   return window['go']['main']['App']['SetLanguage'](arg1);
 }
@@ -116,6 +160,10 @@ export function ToggleTor() {
 
 export function ToggleVPN() {
   return window['go']['main']['App']['ToggleVPN']();
+}
+
+export function ToggleWireGuard() {
+  return window['go']['main']['App']['ToggleWireGuard']();
 }
 
 export function UpdateSetting(arg1, arg2) {

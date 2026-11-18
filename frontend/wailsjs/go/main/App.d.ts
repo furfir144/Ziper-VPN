@@ -3,6 +3,7 @@
 import {vpn} from '../models';
 import {settings} from '../models';
 import {main} from '../models';
+import {wireguard} from '../models';
 
 export function ClearSelectedServer():Promise<void>;
 
@@ -10,13 +11,23 @@ export function ClearTorLogs():Promise<void>;
 
 export function ClearVPNLogs():Promise<void>;
 
+export function ClearWireGuardLogs():Promise<void>;
+
 export function ConnectServer(arg1:string):Promise<void>;
+
+export function ConnectWireGuard():Promise<void>;
 
 export function DeleteProfile(arg1:string):Promise<boolean>;
 
+export function DeleteWireGuardProfile(arg1:string):Promise<boolean>;
+
 export function DeselectCustomProfile():Promise<void>;
 
+export function DeselectWireGuardProfile(arg1:string):Promise<void>;
+
 export function DisconnectVPN():Promise<void>;
+
+export function DisconnectWireGuard():Promise<void>;
 
 export function Elevate():Promise<boolean>;
 
@@ -38,9 +49,19 @@ export function GetVPNLogs():Promise<Array<string>>;
 
 export function GetVPNState():Promise<string>;
 
+export function GetWireGuardLogs():Promise<Array<string>>;
+
+export function GetWireGuardProfileInfo(arg1:string):Promise<main.WGProfileInfo>;
+
+export function GetWireGuardState():Promise<wireguard.State>;
+
+export function ImportWireGuardProfileDialog():Promise<string>;
+
 export function IsAdmin():Promise<boolean>;
 
 export function ListProfiles():Promise<Array<string>>;
+
+export function ListWireGuardProfiles():Promise<Array<string>>;
 
 export function LoadProfile(arg1:string):Promise<string|boolean>;
 
@@ -54,6 +75,8 @@ export function SelectCustomProfile(arg1:string):Promise<void>;
 
 export function SelectServer(arg1:string,arg2:string):Promise<void>;
 
+export function SelectWireGuardProfile(arg1:string):Promise<void>;
+
 export function SetLanguage(arg1:string):Promise<string>;
 
 export function StartFailover():Promise<void>;
@@ -61,5 +84,7 @@ export function StartFailover():Promise<void>;
 export function ToggleTor():Promise<void>;
 
 export function ToggleVPN():Promise<void>;
+
+export function ToggleWireGuard():Promise<void>;
 
 export function UpdateSetting(arg1:string,arg2:string):Promise<void>;

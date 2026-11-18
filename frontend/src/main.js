@@ -30,6 +30,10 @@ let state = {
   torStarting: false,
   activeProfile: '',
   profiles: [],
+  wgStatus: 'DISCONNECTED',
+  wgProfile: '',
+  wgProfiles: [],
+  wgStats: null,
 };
 
 /* ── Toast ─────────────────────────────────────────────────── */
@@ -446,6 +450,177 @@ $('btn-copy-tor-logs').addEventListener('click', async () => {
 });
 $('btn-clear-tor-logs').addEventListener('click', async () => { await call(App.ClearTorLogs); $('tor-logs').innerHTML = ''; });
 
+/* ── WireGuard ─────────────────────────────────────────────── */
+const WG_HERO = {
+  DISCONNECTED: { cls: 'state-stopped',    title: 'WireGuard відключено',  sub: 'Криптографічний тунель на базі wireguard-go.', btn: 'Підключити WireGuard' },
+  CONNECTING:   { cls: 'state-connecting', title: 'Підключення...',        sub: 'Створюємо Wintun адаптер та чекаємо хендшейк.', btn: 'Скасувати' },
+  CONNECTED:    { cls: 'state-connected',  title: 'WireGuard підключено',  sub: 'Тунель активний — весь трафік зашифровано.', btn: 'Відключити' },
+};
+
+function humanBytes(n) {
+  if (!n || n <= 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let i = 0;
+  while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+  return (i === 0 ? String(Math.round(n)) : n.toFixed(1)) + ' ' + units[i];
+}
+
+function updateWGHero() {
+  const st = state.wgStatus || 'DISCONNECTED';
+  const h = WG_HERO[st] || WG_HERO.DISCONNECTED;
+  const shield = $('wg-shield');
+  if (shield) {
+    shield.classList.remove('state-stopped', 'state-connecting', 'state-connected');
+    shield.classList.add(h.cls);
+  }
+  const title = $('wg-title');
+  if (title) title.textContent = h.title;
+  const subtitle = $('wg-subtitle');
+  if (subtitle) {
+    subtitle.textContent = st === 'CONNECTED' && state.wgStats && state.wgStats.endpoint
+      ? 'Тунель активний: ' + state.wgStats.endpoint
+      : h.sub;
+  }
+  const btn = $('btn-toggle-wg');
+  if (btn) btn.textContent = h.btn;
+  const line = $('wg-profile-line');
+  if (line) {
+    if (state.wgProfile) {
+      line.innerHTML = 'Профіль: <b>' + escapeHtml(state.wgProfile) + '</b>' +
+        (state.wgStats && state.wgStats.address ? ' • Адреса тунелю: <b>' + escapeHtml(state.wgStats.address) + '</b>' : '');
+    } else {
+      line.innerHTML = 'Профіль: <b>не обрано</b> — імпортуйте .conf файл нижче';
+    }
+  }
+}
+
+function updateWGStats(st) {
+  if (!st) return;
+  const $v = (id) => $(id);
+  $v('wg-address').textContent = st.address || '—';
+  $v('wg-endpoint').textContent = st.endpoint || '—';
+  $v('wg-dns').textContent = (st.dns && st.dns.length) ? st.dns.join(', ') : '—';
+  const hs = $v('wg-handshake');
+  if (st.status !== 'CONNECTED') hs.textContent = '—';
+  else if (st.last_handshake < 0) hs.textContent = 'очікується...';
+  else hs.textContent = st.last_handshake < 3 ? 'щойно' : Math.round(st.last_handshake) + ' с тому';
+  $v('wg-rx').textContent = humanBytes(st.rx);
+  $v('wg-tx').textContent = humanBytes(st.tx);
+}
+
+function wgInfoText(info) {
+  if (!info || !info.ok) return '';
+  const parts = [];
+  if (info.endpoint) parts.push('Endpoint: ' + info.endpoint);
+  if (info.addresses && info.addresses.length) parts.push('Адреса: ' + info.addresses.join(', '));
+  parts.push(info.peers === 1 ? '1 пір' : (info.peers || 0) + ' пірів');
+  return parts.join(' • ');
+}
+
+async function fillWGInfo(name) {
+  const info = await call(App.GetWireGuardProfileInfo, name);
+  const el = document.querySelector('[data-wg-info="' + CSS.escape(name) + '"]');
+  if (el) el.textContent = wgInfoText(info);
+}
+
+function renderWGProfiles() {
+  const box = $('wg-profiles-list');
+  box.innerHTML = '';
+  if (!state.wgProfiles.length) {
+    box.innerHTML = '<div class="muted">Поки немає .conf профілів</div>';
+  }
+  state.wgProfiles.forEach(name => {
+    const active = state.wgProfile === name;
+    const item = document.createElement('div');
+    item.className = 'profile-item' + (active ? ' active' : '');
+    item.innerHTML = `<div class="wg-prof-main">
+      <span>${escapeHtml(name)}</span>
+      <span class="wg-prof-info" data-wg-info="${escapeHtml(name)}"></span>
+    </div>
+    <span class="pi-actions">
+      <label class="bar-switch" title="${active
+        ? 'Скасувати профіль WireGuard'
+        : 'Вибрати цей профіль — підключення буде через нього'}">
+        <input type="checkbox" class="switch" ${active ? 'checked' : ''}/>
+      </label>
+      <button data-wg-del="${escapeHtml(name)}">Видалити</button>
+    </span>`;
+    const sw = item.querySelector('.switch');
+    sw.addEventListener('change', () => {
+      if (sw.checked) selectWGProfile(name);
+      else if (state.wgProfile === name) deselectWGProfile(name);
+      else sw.checked = false;
+    });
+    box.appendChild(item);
+    fillWGInfo(name);
+  });
+  box.querySelectorAll('button[data-wg-del]').forEach(b => {
+    b.addEventListener('click', () => deleteWGProfile(b.dataset.wgDel));
+  });
+}
+
+async function selectWGProfile(name) {
+  await call(App.SelectWireGuardProfile, name);
+  state.wgProfile = name;
+  renderWGProfiles();
+  updateWGHero();
+  toast('Профіль ' + name + ' обрано — підключення буде через нього', 'positive');
+}
+
+async function deselectWGProfile(name) {
+  await call(App.DeselectWireGuardProfile, name);
+  if (state.wgProfile === name) state.wgProfile = '';
+  renderWGProfiles();
+  updateWGHero();
+  toast('Профіль відмінено', 'info');
+}
+
+async function deleteWGProfile(name) {
+  const ok = await call(App.DeleteWireGuardProfile, name);
+  if (ok) {
+    toast('Профіль ' + name + ' видалено', 'positive');
+    if (state.wgProfile === name) state.wgProfile = '';
+    await loadWGProfiles();
+    updateWGHero();
+  } else toast('Не вдалося видалити профіль ' + name, 'negative');
+}
+
+async function loadWGProfiles() {
+  const names = await call(App.ListWireGuardProfiles) || [];
+  state.wgProfiles = names;
+  renderWGProfiles();
+}
+
+async function refreshWG() {
+  const st = await call(App.GetWireGuardState);
+  if (st) { state.wgStatus = st.status || 'DISCONNECTED'; state.wgStats = st; }
+  updateWGHero();
+  updateWGStats(state.wgStats);
+}
+
+$('btn-toggle-wg').addEventListener('click', async () => {
+  if (!hasBackend()) { toast('Демо-режим у браузері', 'info'); return; }
+  await call(App.ToggleWireGuard);
+});
+
+$('btn-import-wg').addEventListener('click', async () => {
+  const saved = await call(App.ImportWireGuardProfileDialog);
+  if (saved) {
+    await call(App.SelectWireGuardProfile, saved);
+    state.wgProfile = saved;
+    await loadWGProfiles();
+    updateWGHero();
+    toast('Завантажено: ' + saved + ' — профіль активний', 'positive');
+  }
+});
+
+$('btn-copy-wg-logs').addEventListener('click', async () => {
+  const logs = await call(App.GetWireGuardLogs) || [];
+  await navigator.clipboard.writeText(logs.join('\n'));
+  toast('Логи WireGuard скопійовано', 'positive');
+});
+$('btn-clear-wg-logs').addEventListener('click', async () => { await call(App.ClearWireGuardLogs); $('wg-logs').innerHTML = ''; });
+
 /* ── Налаштування (автозбереження) ─────────────────────────── */
 async function saveBool(key, checked) {
   await call(App.UpdateSetting, key, String(!!checked));
@@ -550,6 +725,14 @@ function bindEvents() {
   EventsOn('vpn:notification', (n) => { if (n && n.message) toast(n.message, n.kind); });
   EventsOn('tor:log', (msg) => appendLog('tor-logs', msg));
   EventsOn('tor:state', () => refreshTor());
+  EventsOn('wg:log', (msg) => appendLog('wg-logs', msg));
+  EventsOn('wg:stats', (st) => {
+    if (!st) return;
+    state.wgStatus = st.status || 'DISCONNECTED';
+    state.wgStats = st;
+    updateWGHero();
+    updateWGStats(st);
+  });
   EventsOn('servers:refreshed', (servers) => {
     if (servers && servers.length) {
       state.servers = servers;
@@ -581,6 +764,8 @@ async function init() {
     $('tor-bridges-enabled').checked = !!s.tor_bridges_enabled;
     $('tor-bridges').value = s.tor_bridges || '';
     $('tor-bridges').classList.toggle('hidden', !s.tor_bridges_enabled);
+    // WireGuard
+    state.wgProfile = s.wg_profile || '';
     $('warp-mode').value = ['UDP', 'TCP', 'Auto'].includes(s.protocol) ? s.protocol : 'UDP';
     state.activeProfile = s.custom_ovpn_name || '';
     if (state.activeProfile) $('pr-profile').textContent = state.activeProfile;
@@ -604,10 +789,14 @@ async function init() {
   await loadProfiles();
   updateTorHero();
   await refreshTor();
+  await refreshWG();
+  await loadWGProfiles();
   const vlogs = await call(App.GetVPNLogs) || [];
   vlogs.forEach(m => appendLog('vpn-logs', m));
   const tlogs = await call(App.GetTorLogs) || [];
   tlogs.forEach(m => appendLog('tor-logs', m));
+  const wglogs = await call(App.GetWireGuardLogs) || [];
+  wglogs.forEach(m => appendLog('wg-logs', m));
 }
 
 init();

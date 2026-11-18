@@ -17,6 +17,7 @@ import (
 	"ziper-vpn-go/internal/tray"
 	"ziper-vpn-go/internal/win"
 	"ziper-vpn-go/internal/vpn"
+	"ziper-vpn-go/internal/wireguard"
 )
 
 // App — об'єкт, який біндиться у фронтенд.
@@ -28,6 +29,7 @@ type App struct {
 	torActive   bool
 	logs        []string
 	torLogs     []string
+	wgLogs      []string
 	connectedAt time.Time
 	failoverMu  sync.Mutex
 	failoverIdx int
@@ -42,6 +44,7 @@ func (a *App) startup(ctx context.Context) {
 
 	vpn.SetCallbacks(a.log, a.onVPNConnected, a.onVPNDisconnected)
 	tor.SetLogCallback(a.torLog)
+	wireguard.SetCallbacks(a.wgLog, a.onWGConnected, a.onWGDisconnected, a.onWGStats)
 
 	// відновлюємо мову з налаштувань
 	s := settings.Load()
@@ -88,6 +91,7 @@ func (a *App) hideWindow() {
 // quitApp — повне завершення програми (з трея).
 func (a *App) quitApp() {
 	a.DisconnectVPN()
+	wireguard.Disconnect()
 	tor.Stop()
 	// знімаємо Kill Switch, щоб після виходу інтернет не лишився заблокованим
 	_ = win.DisableKillSwitch()
@@ -235,6 +239,8 @@ func (a *App) UpdateSetting(key, value string) {
 		s.TorBridges = value
 	case "custom_ovpn_name":
 		s.CustomOvpnName = value
+	case "wg_profile":
+		s.WireGuardProfile = value
 	}
 	settings.Save(s)
 }
@@ -346,6 +352,12 @@ func (a *App) connectVPN(serverIP string) {
 	// Деактивуємо Tor якщо активний (як у Python-версії)
 	if tor.IsActive() {
 		tor.Stop()
+	}
+
+	// WireGuard і OpenVPN — взаємовиключні режими тунелю
+	if wireguard.IsActive() {
+		wireguard.Disconnect()
+		time.Sleep(300 * time.Millisecond)
 	}
 
 	s := settings.Load()
@@ -601,6 +613,229 @@ func (a *App) GetTorLogs() []string {
 func (a *App) ClearTorLogs() {
 	a.mu.Lock()
 	a.torLogs = nil
+	a.mu.Unlock()
+}
+
+// ─── WireGuard ─────────────────────────────────────────────────────────────
+
+// wgLog — лог тунелю WireGuard (окремий буфер і окрема подія UI).
+func (a *App) wgLog(msg string) {
+	a.mu.Lock()
+	a.wgLogs = append(a.wgLogs, fmt.Sprintf("[%s] %s", time.Now().Format("15:04:05"), msg))
+	if len(a.wgLogs) > 2000 {
+		a.wgLogs = a.wgLogs[len(a.wgLogs)-2000:]
+	}
+	a.mu.Unlock()
+	runtime.EventsEmit(a.ctx, "wg:log", msg)
+}
+
+// onWGConnected — тунель WireGuard піднято (хендшейк успішний).
+func (a *App) onWGConnected() {
+	a.wgLog("WireGuard тунель успішно встановлено! ✓")
+	info := vpn.FetchCurrentIPInfo()
+	runtime.EventsEmit(a.ctx, "vpn:ipinfo", info)
+	a.notifyUser(i18n.Trf("WireGuard підключено через {country}!", map[string]string{"country": info.Country}), "positive")
+	if tr := tray.GetInstance(); tr != nil {
+		tr.UpdateState("CONNECTED")
+	}
+}
+
+// onWGDisconnected — тунель WireGuard обірвано/закрито.
+func (a *App) onWGDisconnected(reason string) {
+	a.wgLog("WireGuard відключено (" + reason + ")")
+	if !strings.Contains(reason, "користувачем") {
+		a.notifyUser(i18n.Trf("WireGuard відключено: {ex}", map[string]string{"ex": reason}), "negative")
+	} else {
+		a.notifyUser(i18n.Tr("WireGuard успішно відключено."), "positive")
+	}
+	// трей показує DISCONNECTED лише тоді, коли і OpenVPN не активний
+	a.mu.Lock()
+	st := a.vpnStatus
+	a.mu.Unlock()
+	if tr := tray.GetInstance(); tr != nil && st == "DISCONNECTED" {
+		tr.UpdateState("DISCONNECTED")
+	}
+}
+
+// onWGStats — періодична статистика тунелю у UI.
+func (a *App) onWGStats(st wireguard.State) {
+	runtime.EventsEmit(a.ctx, "wg:stats", st)
+}
+
+// GetWireGuardState — поточний стан WireGuard тунелю.
+func (a *App) GetWireGuardState() wireguard.State {
+	return wireguard.CurrentState()
+}
+
+// ConnectWireGuard — запускає WireGuard тунель з активного профілю.
+func (a *App) ConnectWireGuard() {
+	st := wireguard.CurrentState()
+	if st.Status != "DISCONNECTED" {
+		return
+	}
+	s := settings.Load()
+	name := s.WireGuardProfile
+	if name == "" {
+		a.wgLog("[WARN] " + i18n.Tr("Профіль WireGuard не обрано."))
+		a.notifyUser(i18n.Tr("Спочатку оберіть .conf профіль на вкладці WireGuard."), "negative")
+		return
+	}
+	content, err := settings.ReadWGProfile(name)
+	if err != nil {
+		a.wgLog("[ERROR] Не вдалося прочитати профіль " + name + ": " + err.Error())
+		a.notifyUser(i18n.Tr("Помилка: Не вдалося підключитися."), "negative")
+		return
+	}
+
+	// WireGuard — єдиний активний тунель: зупиняємо інші режими
+	if tor.IsActive() {
+		tor.Stop()
+	}
+	a.mu.Lock()
+	vpnStatus := a.vpnStatus
+	a.mu.Unlock()
+	if vpnStatus != "DISCONNECTED" {
+		a.log("WireGuard запускається — зупиняю OpenVPN тунель...")
+		vpn.Disconnect()
+		a.setStatus("DISCONNECTED")
+		time.Sleep(600 * time.Millisecond)
+	}
+
+	// DNS з налаштувань застосунку — якщо профіль не задає власний
+	fallbackDNS, _ := vpn.DNSServers(s.BlockAds, s.DNSResolver, s.CustomDNS)
+	go func() {
+		if err := wireguard.Connect(name, content, fallbackDNS); err != nil {
+			a.wgLog("[ERROR] " + err.Error())
+		}
+	}()
+}
+
+// DisconnectWireGuard — розриває WireGuard тунель.
+func (a *App) DisconnectWireGuard() {
+	go wireguard.Disconnect()
+}
+
+// ToggleWireGuard — підключення/відключення WireGuard.
+func (a *App) ToggleWireGuard() {
+	st := wireguard.CurrentState()
+	if st.Status == "DISCONNECTED" {
+		a.ConnectWireGuard()
+	} else {
+		a.DisconnectWireGuard()
+	}
+}
+
+// ListWireGuardProfiles — список збережених .conf профілів.
+func (a *App) ListWireGuardProfiles() []string {
+	return settings.ListWGProfiles()
+}
+
+// ImportWireGuardProfileDialog — діалог імпорту .conf профілю.
+func (a *App) ImportWireGuardProfileDialog() string {
+	path, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: i18n.Tr("Виберіть свій .conf конфіг WireGuard"),
+		Filters: []runtime.FileFilter{
+			{DisplayName: "WireGuard конфігурації (*.conf)", Pattern: "*.conf"},
+		},
+	})
+	if err != nil || path == "" {
+		return ""
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		a.wgLog("[ERROR] Імпорт конфіга не вдався: " + err.Error())
+		return ""
+	}
+	// перевірка конфігурації ДО збереження
+	if _, err := wireguard.ParseConf(string(content)); err != nil {
+		a.wgLog("[ERROR] Некоректний конфіг " + filepath.Base(path) + ": " + err.Error())
+		a.notifyUser(i18n.Trf("Некоректний .conf конфіг: {ex}", map[string]string{"ex": err.Error()}), "negative")
+		return ""
+	}
+	name := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+	saved := settings.SaveWGProfile(name, string(content))
+	if saved != "" {
+		a.wgLog("Збережено WireGuard профіль: config/wireguard/" + saved)
+		a.notifyUser(i18n.Trf("Завантажено: {name}", map[string]string{"name": saved}), "positive")
+	} else {
+		a.wgLog("[ERROR] Не вдалося зберегти конфіг " + path)
+	}
+	return saved
+}
+
+// SelectWireGuardProfile — встановлює активний WireGuard профіль.
+func (a *App) SelectWireGuardProfile(name string) {
+	a.UpdateSetting("wg_profile", name)
+	a.wgLog("WireGuard профіль обрано: " + name)
+}
+
+// DeselectWireGuardProfile — прибирає активний WireGuard профіль.
+func (a *App) DeselectWireGuardProfile(name string) {
+	s := settings.Load()
+	if s.WireGuardProfile == name {
+		a.UpdateSetting("wg_profile", "")
+		a.wgLog("WireGuard профіль скинуто: " + name)
+	}
+}
+
+// DeleteWireGuardProfile — видаляє профіль WireGuard.
+func (a *App) DeleteWireGuardProfile(name string) bool {
+	ok := settings.DeleteWGProfile(name)
+	if ok {
+		a.wgLog("Видалено WireGuard профіль: " + name)
+		if s := settings.Load(); s.WireGuardProfile == name {
+			a.UpdateSetting("wg_profile", "")
+		}
+	} else {
+		a.wgLog("[ERROR] Не вдалося видалити профіль: " + name)
+	}
+	return ok
+}
+
+// WGProfileInfo — короткий опис .conf профілю для UI.
+type WGProfileInfo struct {
+	OK        bool     `json:"ok"`
+	Addresses []string `json:"addresses"`
+	DNS       []string `json:"dns"`
+	Endpoint  string   `json:"endpoint"`
+	Peers     int      `json:"peers"`
+	MTU       int      `json:"mtu"`
+}
+
+// GetWireGuardProfileInfo — короткий опис .conf профілю для UI.
+func (a *App) GetWireGuardProfileInfo(name string) WGProfileInfo {
+	out := WGProfileInfo{}
+	content, err := settings.ReadWGProfile(name)
+	if err != nil {
+		return out
+	}
+	c, err := wireguard.ParseConf(content)
+	if err != nil {
+		return out
+	}
+	sum := wireguard.Describe(c)
+	out.OK = true
+	out.Addresses = sum.Addresses
+	out.DNS = sum.DNS
+	out.Endpoint = sum.Endpoint
+	out.Peers = sum.Peers
+	out.MTU = sum.MTU
+	return out
+}
+
+// GetWireGuardLogs — логи WireGuard.
+func (a *App) GetWireGuardLogs() []string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	out := make([]string, len(a.wgLogs))
+	copy(out, a.wgLogs)
+	return out
+}
+
+// ClearWireGuardLogs — очищає логи WireGuard.
+func (a *App) ClearWireGuardLogs() {
+	a.mu.Lock()
+	a.wgLogs = nil
 	a.mu.Unlock()
 }
 

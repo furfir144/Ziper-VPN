@@ -52,6 +52,14 @@
         <span>Tor</span>
       </button>
 
+      <button class="nav-item" data-page="wireguard">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          <path d="M9 12l2 2 4-4"/>
+        </svg>
+        <span>WireGuard</span>
+      </button>
+
       <button class="nav-item" data-page="settings">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="3"/>
@@ -255,6 +263,90 @@
       </div>
     </section>
 
+    <!-- ── WIREGUARD ── -->
+    <section class="page page-wireguard" id="page-wireguard">
+      <div class="hero wg-hero">
+        <div class="wg-logo-wrap">
+          <svg id="wg-shield" class="state-stopped" viewBox="0 0 120 140" aria-hidden="true">
+            <defs>
+              <linearGradient id="wg-grad" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#4da3f7"/>
+                <stop offset="100%" stop-color="#7c5ab4"/>
+              </linearGradient>
+            </defs>
+            <!-- щит -->
+            <path d="M60 6 L112 24 V70 c0 33 -21 55 -52 64 C27 125 8 103 8 70 V24 Z"
+              fill="#181818" stroke="url(#wg-grad)" stroke-width="5" stroke-linejoin="round"/>
+            <!-- ✕ (від'єднано) -->
+            <g class="wg-mark-x" stroke="#9a9a9a" stroke-width="9" stroke-linecap="round">
+              <line x1="46" y1="56" x2="74" y2="84"/>
+              <line x1="74" y1="56" x2="46" y2="84"/>
+            </g>
+            <!-- ключ (підключення) -->
+            <g class="wg-mark-key">
+              <circle cx="60" cy="62" r="13" fill="none" stroke="url(#wg-grad)" stroke-width="7"/>
+              <line x1="60" y1="75" x2="60" y2="99" stroke="url(#wg-grad)" stroke-width="7" stroke-linecap="round"/>
+            </g>
+            <!-- ✓ (підключено) -->
+            <g class="wg-mark-check" fill="none" stroke="#2fbf71" stroke-width="9" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="40,70 55,84 82,52"/>
+            </g>
+          </svg>
+          <span class="wg-particle wp1">🔑</span>
+          <span class="wg-particle wp2">🛡️</span>
+          <span class="wg-particle wp3">🔒</span>
+          <span class="wg-particle wp4">🌐</span>
+          <span class="wg-particle wp5">⚡</span>
+          <span class="wg-particle wp6">📶</span>
+          <span class="wg-particle wp7">🕵️</span>
+          <span class="wg-particle wp8">🔐</span>
+          <span class="wg-particle wp9">💾</span>
+          <span class="wg-particle wp10">🚀</span>
+          <span class="wg-particle wp11">🗝️</span>
+          <span class="wg-particle wp12">🛜</span>
+        </div>
+        <h1 id="wg-title">WireGuard відключено</h1>
+        <p id="wg-subtitle">Криптографічний тунель на базі wireguard-go.</p>
+
+        <button id="btn-toggle-wg" class="btn-primary">Підключити WireGuard</button>
+      </div>
+
+      <div class="mode-block">
+        <div class="mode-label">Активний профіль</div>
+        <div id="wg-profile-line" class="server-line">Профіль: <b>не обрано</b> — імпортуйте .conf файл нижче</div>
+      </div>
+
+      <div class="card wg-stats-card">
+        <h3>Статистика тунелю</h3>
+        <div class="info-grid">
+          <div class="info-item"><span class="label">АДРЕСА ТУНЕЛЮ</span><span id="wg-address" class="value">—</span></div>
+          <div class="info-item"><span class="label">ENDPOINT</span><span id="wg-endpoint" class="value">—</span></div>
+          <div class="info-item"><span class="label">DNS</span><span id="wg-dns" class="value">—</span></div>
+          <div class="info-item"><span class="label">ХЕНДШЕЙК</span><span id="wg-handshake" class="value">—</span></div>
+          <div class="info-item"><span class="label">ОТРИМАНО</span><span id="wg-rx" class="value">0 B</span></div>
+          <div class="info-item"><span class="label">ВІДПРАВЛЕНО</span><span id="wg-tx" class="value">0 B</span></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Профілі WireGuard (.conf)</h3>
+        <p class="muted">Імпортуйте стандартний .conf файл — ключі зберігаються локально та ніколи не передаються. Підтримуються кілька пірів, preshared keys, keepalive та full-tunnel 0.0.0.0/0.</p>
+        <div class="row">
+          <button id="btn-import-wg" class="btn-secondary">Імпортувати .conf файл</button>
+        </div>
+        <div id="wg-profiles-list" class="profiles-list"></div>
+      </div>
+
+      <div class="card">
+        <h3>Живі логи WireGuard</h3>
+        <div id="wg-logs" class="log-box"></div>
+        <div class="row">
+          <button id="btn-copy-wg-logs" class="btn-ghost">Копіювати</button>
+          <button id="btn-clear-wg-logs" class="btn-ghost">Очистити</button>
+        </div>
+      </div>
+    </section>
+
     <!-- ── НАЛАШТУВАННЯ ── -->
     <section class="page" id="page-settings">
       <div class="page-head">
@@ -347,6 +439,7 @@
         <ul class="about-list">
           <li>Автоматичний підбір серверів VPN Gate з failover</li>
           <li>OpenVPN тунель (UDP / TCP) через Wintun-адаптер</li>
+          <li>WireGuard тунель (wireguard-go) з власними .conf профілями</li>
           <li>Захист від витоку DNS, блокування реклами та трекерів</li>
           <li>Tor SOCKS5 проксі для анонімізації трафіку</li>
           <li>Власні .ovpn профілі та трей з швидким керуванням</li>

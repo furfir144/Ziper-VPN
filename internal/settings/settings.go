@@ -31,12 +31,14 @@ var Defaults = map[string]interface{}{
 	"custom_ovpn_name":    "",
 	"tor_bridges_enabled": false,
 	"tor_bridges":         "",
+	"wg_profile":          "",
 }
 
 var (
 	ConfigDir         string
 	SettingsFile      string
 	CustomProfilesDir string
+	WireGuardDir      string
 )
 
 // Init — визначає робочі шляхи (поруч із exe у зібраній версії).
@@ -49,6 +51,7 @@ func Init() {
 	ConfigDir = filepath.Join(dir, "config")
 	SettingsFile = filepath.Join(ConfigDir, "settings.json")
 	CustomProfilesDir = filepath.Join(ConfigDir, "profiles")
+	WireGuardDir = filepath.Join(ConfigDir, "wireguard")
 }
 
 // Settings — типізовані налаштування (для біндингу у Wails).
@@ -72,6 +75,7 @@ type Settings struct {
 	CustomOvpnName     string `json:"custom_ovpn_name"`
 	TorBridgesEnabled  bool   `json:"tor_bridges_enabled"`
 	TorBridges         string `json:"tor_bridges"`
+	WireGuardProfile   string `json:"wg_profile"`
 }
 
 // Load — читає settings.json; синхронізує autostart із реєстром Windows.
@@ -181,4 +185,84 @@ func ReadCustomProfile(name string) (string, error) {
 // DeleteCustomProfile — видаляє збережений профіль.
 func DeleteCustomProfile(name string) bool {
 	return os.Remove(ProfilePath(name)) == nil
+}
+
+// ─── WireGuard .conf профілі ──────────────────────────────────────────────
+
+// SanitizeWGName — прибирає шляхи та небезпечні символи з імені .conf файлу.
+func SanitizeWGName(name string) string {
+	name = filepath.Base(strings.TrimSpace(name))
+	var b strings.Builder
+	for _, ch := range name {
+		ok := (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') ||
+			ch == ' ' || ch == '-' || ch == '_' || ch == '.'
+		if ok {
+			b.WriteRune(ch)
+		}
+	}
+	safe := strings.Join(strings.Fields(b.String()), " ")
+	if safe == "" {
+		safe = "custom.conf"
+	}
+	if !strings.HasSuffix(strings.ToLower(safe), ".conf") {
+		safe += ".conf"
+	}
+	if len(safe) > 80 {
+		safe = safe[:80]
+	}
+	return safe
+}
+
+// WGProfilePath — повний шлях до збереженого WireGuard профілю.
+func WGProfilePath(name string) string {
+	return filepath.Join(WireGuardDir, SanitizeWGName(name))
+}
+
+// SaveWGProfile — зберігає .conf конфіг; повертає збережене ім'я або "".
+func SaveWGProfile(name, content string) string {
+	if err := os.MkdirAll(WireGuardDir, 0o755); err != nil {
+		return ""
+	}
+	safe := SanitizeWGName(name)
+	if err := os.WriteFile(WGProfilePath(safe), []byte(content), 0o600); err != nil {
+		return ""
+	}
+	return safe
+}
+
+// ListWGProfiles — відсортований список збережених .conf профілів.
+func ListWGProfiles() []string {
+	entries, err := os.ReadDir(WireGuardDir)
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for _, e := range entries {
+		n := e.Name()
+		if !e.IsDir() && strings.HasSuffix(strings.ToLower(n), ".conf") {
+			out = append(out, n)
+		}
+	}
+	for i := 0; i < len(out); i++ {
+		for j := i + 1; j < len(out); j++ {
+			if strings.ToLower(out[j]) < strings.ToLower(out[i]) {
+				out[i], out[j] = out[j], out[i]
+			}
+		}
+	}
+	return out
+}
+
+// ReadWGProfile — читає збережений профіль.
+func ReadWGProfile(name string) (string, error) {
+	data, err := os.ReadFile(WGProfilePath(name))
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
+// DeleteWGProfile — видаляє збережений профіль.
+func DeleteWGProfile(name string) bool {
+	return os.Remove(WGProfilePath(name)) == nil
 }
